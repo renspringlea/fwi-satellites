@@ -49,8 +49,8 @@ ggsave("preliminary_analysis/g_corrplot.png",g_corrplot,width=15,height=15)
 
 # Make data frames
 df_wide_c$day <- as.factor(df_wide_c$day)
-df_wide_c_pca_bands <- df_wide_c[,c(8:19)] #Columns with bands
-df_wide_c_pca_env <- df_wide_c[,c(7,20:24)] #Columns with environmental vars
+df_wide_c_pca_bands <- df_wide_c[,c(7:18)] #Columns with bands
+df_wide_c_pca_env <- df_wide_c[,c(6,19:23)] #Columns with environmental vars
 
 # Generate PCA objects
 pca_bands <- prcomp(df_wide_c_pca_bands, scale=T)
@@ -100,6 +100,65 @@ sumstat_bands
 # Save to file
 write.csv(sumstat_env,"preliminary_analysis/sumstat_env.csv")
 write.csv(sumstat_bands,"preliminary_analysis/sumstat_bands.csv")
+
+
+######################################################
+### Try different ways of expressing the variables ###
+######################################################
+
+# The higher-welfare range of temperature is 25 to 33 C
+df_wide_c$temperature > 33
+df_wide_c$temperature < 25
+# Thus, we can conclude that there are no problems with temperature
+# in this sample.
+
+# The higher-welfare range of pH is 7 to 8
+df_wide_c$ph < 7
+df_wide_c$ph > 8
+# Thus, we can conclude that almost every pond has a pH
+# between 8 and 9
+# So there are issues with pH in the sampled ponds,
+# but there's not enough variance to justify turning this
+# into a categorical variable
+
+# The higher-welfare range of DO is > 5 for catla and > 3.6 for rohu
+df_wide_c$do > 5
+df_wide_c$do > 3.6
+# Thus, we are justified in making a categorical variable for DO
+df_wide_c$do_category <- cut(df_wide_c$do,
+                             breaks=c(-1e99,3.6,5,1e99),
+                             labels=c("bad","moderate","good"))
+
+
+# The higher-welfare range of ammonia is < 1 for catla and < 0.82 for rohu
+df_wide_c$ammonia < 1
+df_wide_c$ammonia < 0.82
+# Thus, we can conclude that there are no problems with ammonia
+# in this sample.
+
+# Now, chlorophyll and phycocyanin
+# These are quite correlated
+cor.test(df_wide_c$chlorophyll,
+         df_wide_c$phycocyanin)
+# 74.6% correlation
+summary(lm(phycocyanin~chlorophyll,data=df_wide_c))
+# 55% R-squared
+
+# What's the correlation like visually?
+g_algae <- ggplot(aes(x=chlorophyll,y=phycocyanin),data=df_wide_c) +
+  geom_point()
+g_algae
+
+# So they're correlated, but at any one value of one variable,
+# there is still a decent amount of variance in the other variable
+# Though the literature is suggesting that phycocyanin has limited utility
+# in the mean time, I'll just use the cutoff of 100 for chlorophyll
+df_wide_c$chlorophyll_category <-  cut(df_wide_c$chlorophyll,
+                                       breaks=c(-1e99,100,1e99),
+                                       labels=c("bad","good"))
+
+
+write.csv(df_wide_c,"intermediate/df_wide_c_cats.csv",row.names = F)
 
 
 

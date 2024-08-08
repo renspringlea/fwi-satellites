@@ -10,125 +10,167 @@ library(ggplot2) #For graphing
 theme_set(theme_bw()) #Because I'm fashionable
 
 # Load data
-df_wide_c <- read.csv("intermediate/df_wide_c.csv")
+df_wide_c_cats <- read.csv("intermediate/df_wide_c_cats.csv")
+df_wide_c_cats$chlorophyll_category <- as.factor(df_wide_c_cats$chlorophyll_category)
+df_wide_c_cats$do_category <- as.factor(df_wide_c_cats$do_category)
 
 # Calculate indices
-df_wide_c$NDWI <- (df_wide_c$B3-df_wide_c$B8)/(df_wide_c$B3+df_wide_c$B8)
-df_wide_c$NDCI <- (df_wide_c$B5-df_wide_c$B4)/(df_wide_c$B5+df_wide_c$B4)
-df_wide_c$NDTI <- (df_wide_c$B4-df_wide_c$B3)/(df_wide_c$B4+df_wide_c$B3)
-df_wide_c$NDMI <- (df_wide_c$B8-df_wide_c$B11)/(df_wide_c$B8+df_wide_c$B11)
-df_wide_c$MNDWI <- (df_wide_c$B3-df_wide_c$B11)/(df_wide_c$B3+df_wide_c$B11)
-df_wide_c$NDVI <- (df_wide_c$B8-df_wide_c$B4)/(df_wide_c$B8+df_wide_c$B4)
+df_wide_c_cats$NDWI <- (df_wide_c_cats$B3-df_wide_c_cats$B8)/(df_wide_c_cats$B3+df_wide_c_cats$B8)
+df_wide_c_cats$NDCI <- (df_wide_c_cats$B5-df_wide_c_cats$B4)/(df_wide_c_cats$B5+df_wide_c_cats$B4)
+df_wide_c_cats$NDTI <- (df_wide_c_cats$B4-df_wide_c_cats$B3)/(df_wide_c_cats$B4+df_wide_c_cats$B3)
+df_wide_c_cats$NDMI <- (df_wide_c_cats$B8-df_wide_c_cats$B11)/(df_wide_c_cats$B8+df_wide_c_cats$B11)
+df_wide_c_cats$MNDWI <- (df_wide_c_cats$B3-df_wide_c_cats$B11)/(df_wide_c_cats$B3+df_wide_c_cats$B11)
+df_wide_c_cats$NDVI <- (df_wide_c_cats$B8-df_wide_c_cats$B4)/(df_wide_c_cats$B8+df_wide_c_cats$B4)
 
-# Restrict to variables in the model
-df_wide_c_model <- df_wide_c[,c(7:ncol(df_wide_c))]
+# Generate grids
+xgb_grid <- expand.grid(nrounds = 1000,
+                        max_depth = c(2,4,6,8,10,14),
+                        eta = c(0.01,0.05,0.1),
+                        gamma=c(0.1,1,10),
+                        colsample_bytree=c(0.25,0.5,0.75,0.1),
+                        min_child_weight=c(1,10,100),
+                        subsample=c(0.25,0.5,0.75))
+svm_grid <- expand.grid(C=c(0.25,0.5,1,2,4,5,6,7,8,9,10,11,12,13,14,15,16,32,64,100,150,200),
+                        sigma=c(0.01,0.05,0.1,0.5,0.6,0.7,0.8,0.9,1,1.1,1.2,1.3,1.4,1.5,2,5))
+rf_grid <- expand.grid(nsets=c(10,20,30,40,50,60,70,80,90,100,150,500),
+                       ntreeperdiv=c(10,20,30,40,50,60,70,80,90,100,150,500),
+                       ntreefinal=c(10,100,200,300,400,500))
+ann_grid <- expand.grid(size=c(1:10),
+                        decay=c(0.001,0.01,0.05,0.1,0.15,0.2,0.3,0.5),
+                        bag=c(TRUE,FALSE))
 
-# Normalise all variables
-#df_wide_c_model <- as.data.frame(scale(df_wide_c_model))
+# Generate training and test datasets
+# for a couple of different seeds
+unique_ponds <- unique(df_wide_c_cats$pond)
+set.seed(3)
+trainIndex_3 <- sample(df_wide_c_cats$pond, round(0.5*length(unique_ponds)))
+dfTrain_3 <- df_wide_c_cats[which(df_wide_c_cats$pond %in% trainIndex_3),]
+dfTest_3 <- df_wide_c_cats[-which(df_wide_c_cats$pond %in% trainIndex_3),]
+writeLines("Seed = 3","results/seeds.txt")
+write("Train ponds: ","results/seeds.txt",append=T)
+write(paste(trainIndex_3,collapse=" "),"results/seeds.txt",append=T)
+write(paste0("(",nrow(dfTrain)," rows)"),"results/seeds.txt",append=T)
+write("Test ponds: ","results/seeds.txt",append=T)
+write(paste(unique(dfTest_3$pond),collapse=" "),"results/seeds.txt",append=T)
+write(paste0("(",nrow(dfTest_3)," rows)"),"results/seeds.txt",append=T)
+set.seed(12)
+trainIndex_12 <- sample(df_wide_c_cats$pond, round(0.5*length(unique_ponds)))
+dfTrain_12 <- df_wide_c_cats[which(df_wide_c_cats$pond %in% trainIndex_12),]
+dfTest_12 <- df_wide_c_cats[-which(df_wide_c_cats$pond %in% trainIndex_12),]
+write("Seed = 12","results/seeds.txt",append=T)
+write("Train ponds: ","results/seeds.txt",append=T)
+write(paste(trainIndex_12,collapse=" "),"results/seeds.txt",append=T)
+write(paste0("(",nrow(dfTrain)," rows)"),"results/seeds.txt",append=T)
+write("Test ponds: ","results/seeds.txt",append=T)
+write(paste(unique(dfTest_12$pond),collapse=" "),"results/seeds.txt",append=T)
+write(paste0("(",nrow(dfTest_12)," rows)"),"results/seeds.txt",append=T)
 
-# Get column IDs of the variables
-col_nos <- which(colnames(df_wide_c_model)==c("ammonia","chlorophyll","do","ph","phycocyanin","temperature"))
+# Train machine learning models
+xgb_chl_3 <- train(chlorophyll_category~NDWI+NDCI+NDTI+NDMI+MNDWI+NDVI+B2+B3+B4+B5+B6+B7+B8+B8A,
+                   data=dfTrain_3,
+                   method="xgbTree",
+                   tuneGrid=xgb.grid,
+                   verbosity=0,
+                   tree_method="hist",
+                   metric="Kappa")
+df_xgb_chl_3 <- data.frame(observation = dfTest_3$chlorophyll_category,
+                           prediction = predict(xgb_chl_3,newdata=dfTest_3))
+metrics_xgb_chl_3 <- postResample(pred=df_xgb_chl_3$prediction,obs=df_xgb_chl_3$observation)
+writeLines(xgb_chl_3,"results/xgb_chl_3.txt")
+write(metrics_xgb_chl_3,"results/xgb_chl_3.txt",append=T)
+write.csv(df_xgb_chl_3,"results/df_xgb_chl_3.csv",row.names=F)
 
-# h/t https://github.com/tidyverse/glue/issues/108
-subform <- function(formula, ...){
-  args <- syms(list(...))
-  subst_ <- substitute(
-    substitute(formula, args),
-    list(formula = formula))
-  as.formula(eval(subst_),attr(formula,".Environment"))
-}
+svm_chl_3 <- train(chlorophyll_category~NDWI+NDCI+NDTI+NDMI+MNDWI+NDVI+B2+B3+B4+B5+B6+B7+B8+B8A,
+                   data=dfTrain_3,
+                   method="svmRadial",
+                   tuneGrid=svm.grid,
+                   preProcess = c("center","scale"),
+                   tuneLength=10,
+                   metric = "Kappa")
+df_svm_chl_3 <- data.frame(observation = dfTest_3$chlorophyll_category,
+                           prediction = predict(svm_chl_3,newdata=dfTest_3))
+metrics_svm_chl_3 <- postResample(pred=df_svm_chl_3$prediction,obs=df_svm_chl_3$observation)
+writeLines(svm_chl_3,"results/svm_chl_3.txt")
+write(metrics_svm_chl_3,"results/svm_chl_3.txt",append=T)
+write.csv(df_svm_chl_3,"results/df_svm_chl_3.csv",row.names=F)
+
+rf_chl_3 <- train(chlorophyll_category~NDWI+NDCI+NDTI+NDMI+MNDWI+NDVI+B2+B3+B4+B5+B6+B7+B8+B8A,
+                  data=dfTrain_3,
+                  method="ordinalRF",
+                  tuneGrid=rf.grid,
+                  preProcess = c("center","scale"),
+                  metric = "Kappa")
+df_rf_chl_3 <- data.frame(observation = dfTest_3$chlorophyll_category,
+                           prediction = predict(rf_chl_3,newdata=dfTest_3))
+metrics_rf_chl_3 <- postResample(pred=df_rf_chl_3$prediction,obs=df_rf_chl_3$observation)
+writeLines(rf_chl_3,"results/rf_chl_3.txt")
+write(metrics_rf_chl_3,"results/rf_chl_3.txt",append=T)
+write.csv(df_rf_chl_3,"results/df_rf_chl_3.csv",row.names=F)
+
+ann_chl_3 <- train(chlorophyll_category~NDWI+NDCI+NDTI+NDMI+MNDWI+NDVI+B2+B3+B4+B5+B6+B7+B8+B8A,
+                   data=dfTrain_3,
+                   method="avNNet",
+                   metric="Kappa",
+                   tuneGrid=ann_grid,
+                   trace=FALSE)
+metrics_ann_chl_3 <- postResample(pred=df_ann_chl_3$prediction,obs=df_ann_chl_3$observation)
+writeLines(ann_chl_3,"results/ann_chl_3.txt")
+write(metrics_ann_chl_3,"results/ann_chl_3.txt",append=T)
+write.csv(df_ann_chl_3,"results/df_ann_chl_3.csv",row.names=F)
+
+xgb_chl_12 <- train(chlorophyll_category~NDWI+NDCI+NDTI+NDMI+MNDWI+NDVI+B2+B12+B4+B5+B6+B7+B8+B8A,
+                   data=dfTrain_12,
+                   method="xgbTree",
+                   tuneGrid=xgb.grid,
+                   verbosity=0,
+                   tree_method="hist",
+                   metric="Kappa")
+df_xgb_chl_12 <- data.frame(observation = dfTest_12$chlorophyll_category,
+                           prediction = predict(xgb_chl_12,newdata=dfTest_12))
+metrics_xgb_chl_12 <- postResample(pred=df_xgb_chl_12$prediction,obs=df_xgb_chl_12$observation)
+writeLines(xgb_chl_12,"results/xgb_chl_12.txt")
+write(metrics_xgb_chl_12,"results/xgb_chl_12.txt",append=T)
+write.csv(df_xgb_chl_12,"results/df_xgb_chl_12.csv",row.names=F)
+
+svm_chl_12 <- train(chlorophyll_category~NDWI+NDCI+NDTI+NDMI+MNDWI+NDVI+B2+B12+B4+B5+B6+B7+B8+B8A,
+                   data=dfTrain_12,
+                   method="svmRadial",
+                   tuneGrid=svm.grid,
+                   preProcess = c("center","scale"),
+                   tuneLength=10,
+                   metric = "Kappa")
+df_svm_chl_12 <- data.frame(observation = dfTest_12$chlorophyll_category,
+                           prediction = predict(svm_chl_12,newdata=dfTest_12))
+metrics_svm_chl_12 <- postResample(pred=df_svm_chl_12$prediction,obs=df_svm_chl_12$observation)
+writeLines(svm_chl_12,"results/svm_chl_12.txt")
+write(metrics_svm_chl_12,"results/svm_chl_12.txt",append=T)
+write.csv(df_svm_chl_12,"results/df_svm_chl_12.csv",row.names=F)
+
+rf_chl_12 <- train(chlorophyll_category~NDWI+NDCI+NDTI+NDMI+MNDWI+NDVI+B2+B12+B4+B5+B6+B7+B8+B8A,
+                  data=dfTrain_12,
+                  method="ordinalRF",
+                  tuneGrid=rf.grid,
+                  preProcess = c("center","scale"),
+                  metric = "Kappa")
+df_rf_chl_12 <- data.frame(observation = dfTest_12$chlorophyll_category,
+                          prediction = predict(rf_chl_12,newdata=dfTest_12))
+metrics_rf_chl_12 <- postResample(pred=df_rf_chl_12$prediction,obs=df_rf_chl_12$observation)
+writeLines(rf_chl_12,"results/rf_chl_12.txt")
+write(metrics_rf_chl_12,"results/rf_chl_12.txt",append=T)
+write.csv(df_rf_chl_12,"results/df_rf_chl_12.csv",row.names=F)
+
+ann_chl_12 <- train(chlorophyll_category~NDWI+NDCI+NDTI+NDMI+MNDWI+NDVI+B2+B12+B4+B5+B6+B7+B8+B8A,
+                   data=dfTrain_12,
+                   method="avNNet",
+                   metric="Kappa",
+                   tuneGrid=ann_grid,
+                   trace=FALSE)
+metrics_ann_chl_12 <- postResample(pred=df_ann_chl_12$prediction,obs=df_ann_chl_12$observation)
+writeLines(ann_chl_12,"results/ann_chl_12.txt")
+write(metrics_ann_chl_12,"results/ann_chl_12.txt",append=T)
+write.csv(df_ann_chl_12,"results/df_ann_chl_12.csv",row.names=F)
 
 
-# Make sure they're all numeric
-sapply(df_wide_c_model,FUN=class)
 
-# Loop neural networks over variables
-for (i in col_nos){
-  set.seed(3)
-  trainIndex <- createDataPartition(df_wide_c_model[,i],
-                                    p=0.7,
-                                    times=1,
-                                    list=F)
-  dfTrain <- df_wide_c_model[trainIndex,]
-  dfTest <- df_wide_c_model[-trainIndex,]
-  
-  
-  # h/t https://github.com/tidyverse/glue/issues/108
-  formula5 <- subform(x ~ B2+B3+B4+B5+B6+B7+B8+B8A +NDWI+NDCI+NDTI+NDMI+MNDWI+NDVI,  
-                      x = names(df_wide_c_model)[i])
-  xgb.grid <- expand.grid(nrounds = 1000,
-                          max_depth = c(2,4,6,8,10,14),
-                          eta = c(0.01,0.05,0.1),
-                          gamma=c(0.1,1,10),
-                          colsample_bytree=c(0.25,0.5,0.75,0.1),
-                          min_child_weight=c(1,10,100),
-                          subsample=c(0.25,0.5,0.75))
-  
-  
-  # Specify machine learning method
-  ml_method <- "xgbTree"
-  #ml_number <- 5
-  #ml_repeats <- 100
-  
-  set.seed(3)
-  control <- trainControl(method="repeatedcv",
-                          number=ml_number,
-                          repeats=ml_repeats,
-                          savePredictions="all",
-                          preProcOptions=c("scale"))
-  
-  xgbgrid <- expand.grid(eta = c(0.05,0.1,0.3,0.4),
-                         max_depth=c(2,4,6,10),
-                         gamma=c(0,1,10,100),
-                         colsample_bytree = c(0.6,0.8),
-                         min_child_weight=c(1,10,100),
-                         subsample=c(0.25,1),
-                         nrounds=c(50,100,150,1000))
-
-  nn_tmp <- train(chlorophyll~NDWI+NDCI+NDTI+NDMI+MNDWI+NDVI,
-                  data=dfTrain,
-                  method=ml_method,
-                  tuneGrid=xgbgrid,
-                  #trControl=trainControl(number=50),
-                  #trControl=control,
-                  verbosity=0,
-                  tree_method="hist")
-                  #linout=TRUE)#,
-                  #maxit=100)
-  
-  write.csv(nn_tmp$results,paste0("results/nn_",i,".csv"))
-  
-
-  dfTest$pred_nn_tmp <- predict(nn_tmp, newdata=dfTest)
-  
-  success_metrics_names <- names(postResample(pred=dfTest$pred_nn_tmp,
-                                              obs=dfTest[,i]))
-  success_metrics <- postResample(pred=dfTest$pred_nn_tmp,
-                                  obs=dfTest[,i])
-  success_metrics
-  
-  caption_success_metrics <- paste0(
-    "method = ",ml_method," (",ml_number,";",ml_repeats,")","; ",
-    success_metrics_names[1]," = ",round(success_metrics[1],3),"; ",
-    success_metrics_names[2]," = ",round(success_metrics[2],3),"; ",
-    success_metrics_names[3]," = ",round(success_metrics[3],)
-  )
-  
-  g_nn_tmp <- ggplot(aes(x=get(names(df_wide_c_model)[i]),y=pred_nn_tmp),data=dfTest) +
-    geom_point() +
-    geom_smooth(method="lm") +
-    labs(x="ground truth",
-         y="model prediction",
-         title=names(df_wide_c_model)[i],
-         caption=caption_success_metrics)
-  print(g_nn_tmp)
-  
-  assign(paste0("g_nn_",i),g_nn_tmp, envir = .GlobalEnv)
-  print(paste0("g_nn_",i))
-
-    ggsave(filename=paste0("results/g_nn_",i,".png"),
-         g_nn_tmp,
-         width=6,height=4)
-}
 
 

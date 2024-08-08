@@ -7,6 +7,7 @@ library(stringr) #For converting units
 library(caret) #for neural networks
 library(ggplot2) #For graphing
 library(viridis) #To help graphing
+library(gridExtra) #To help graphing
 theme_set(theme_bw()) #Because I'm fashionable
 
 # Load ground truth data
@@ -99,19 +100,101 @@ for (i in c(1:length(filenames_cloud))){
 }
 
 # Graph cloud mask images to get our bearings
+g_cloud_1 <- ggplot() +
+  geom_spatraster(data=cloud_day1) +
+  scale_fill_viridis(direction=1,option="cividis") +
+  ggtitle("Day 1; cloud probability")
 g_cloud_2 <- ggplot() +
   geom_spatraster(data=cloud_day2) +
   scale_fill_viridis(direction=1,option="cividis") +
   ggtitle("Day 2; cloud probability")
+g_cloud_3 <- ggplot() +
+  geom_spatraster(data=cloud_day3) +
+  scale_fill_viridis(direction=1,option="cividis") +
+  ggtitle("Day 3; cloud probability")
+g_cloud_4 <- ggplot() +
+  geom_spatraster(data=cloud_day4) +
+  scale_fill_viridis(direction=1,option="cividis") +
+  ggtitle("Day 4; cloud probability")
 g_cloud_5 <- ggplot() +
   geom_spatraster(data=cloud_day5) +
   scale_fill_viridis(direction=1,option="cividis") +
   ggtitle("Day 5; cloud probability")
-g_cloud <- grid.arrange(g_cloud_2,g_cloud_5,nrow=2)
-ggsave("preliminary_analysis/g_cloud.png",g_cloud,width=8,height=8)
+g_cloud <- grid.arrange(g_cloud_1,
+                        g_cloud_2,
+                        g_cloud_3,
+                        g_cloud_4,
+                        g_cloud_5,
+                        nrow=5)
 
-# Choose the cloud mask threshold
-cloud_threshold <- 80
+# Generate true colour images to get our bearings
+g_day1_rgb <- ggplot() +
+  geom_spatraster_rgb(data=rast_day1,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 1; true-colour (RGB)")
+g_day2_rgb <- ggplot() +
+  geom_spatraster_rgb(data=rast_day2,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 2; true-colour (RGB)")
+g_day3_rgb <- ggplot() +
+  geom_spatraster_rgb(data=rast_day3,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 3; true-colour (RGB)")
+g_day4_rgb <- ggplot() +
+  geom_spatraster_rgb(data=rast_day4,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 4; true-colour (RGB)")
+g_day5_rgb <- ggplot() +
+  geom_spatraster_rgb(data=rast_day5,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 5; true-colour (RGB)")
+
+# Generate histograms of the cloud masks to get our bearings
+hist_cloud_1 <- ggplot(aes(x=probability),data=cloud_day1) +
+  geom_histogram(bins=100) +
+  scale_x_continuous(breaks=seq(0,100,2))
+hist_cloud_2 <- ggplot(aes(x=probability),data=cloud_day2) +  
+  geom_histogram(bins=100) +
+  scale_x_continuous(breaks=seq(0,100,2))
+hist_cloud_3 <- ggplot(aes(x=probability),data=cloud_day3) +  
+  geom_histogram(bins=100) +
+  scale_x_continuous(breaks=seq(0,100,2))
+hist_cloud_4 <- ggplot(aes(x=probability),data=cloud_day4) +  
+  geom_histogram(bins=100) +
+  scale_x_continuous(breaks=seq(0,100,2))
+hist_cloud_5 <- ggplot(aes(x=probability),data=cloud_day5) +  
+  geom_histogram(bins=100) +
+  scale_x_continuous(breaks=seq(0,100,2))
+
+# Combine all into a side-by-side comparison
+g_rgb_clouds <- grid.arrange(g_day1_rgb,
+                             g_cloud_1,
+                             g_day2_rgb,
+                             g_cloud_2,
+                             g_day3_rgb,
+                             g_cloud_3,
+                             g_day4_rgb,
+                             g_cloud_4,
+                             g_day5_rgb,
+                             g_cloud_5,
+                             nrow=5)
+ggsave("preliminary_analysis/g_rgb_clouds.png",g_rgb_clouds,width=10,height=20)
+g_hist_clouds <- grid.arrange(hist_cloud_1,
+                              hist_cloud_2,
+                              hist_cloud_3,
+                              hist_cloud_4,
+                              hist_cloud_5,
+                              nrow=5)
+ggsave("preliminary_analysis/g_hist_clouds.png",g_hist_clouds,width=10,height=20)
+
+# Choose the cloud mask thresholds
+# (from day 1 to day 5, in order)
+cloud_threshold <- c(10,30,12,22,26)
 
 # Now repeat the process (sorry)
 # mask by the cloud threshold
@@ -125,7 +208,7 @@ for (i in c(1:length(filenames))){
   rast_tmp_resampled <- resample(rast_tmp,cloud_tmp)
   rast_tmp_masked <- mask(x = rast_tmp_resampled,
                           mask = cloud_tmp,
-                          maskvalues = seq(cloud_threshold,100,1))
+                          maskvalues = seq(cloud_threshold[i],100,1))
   
   assign(paste0("rast_masked_day",i), rast_tmp_masked)
   
@@ -181,8 +264,8 @@ df_wide$temperature <- as.numeric(df_wide$temperature)
 df_wide_c <- df_wide[complete.cases(df_wide),]
 
 # Save to file
-write.csv(df_wide,"intermediate/df_wide.csv")
-write.csv(df_wide_c,"intermediate/df_wide_c.csv")
+write.csv(df_wide,"intermediate/df_wide.csv",row.names = F)
+write.csv(df_wide_c,"intermediate/df_wide_c.csv",row.names = F)
 
 
 
