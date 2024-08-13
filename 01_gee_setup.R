@@ -1,6 +1,6 @@
 # https://github.com/r-spatial/rgee
-install.packages(c("remotes", "googledrive"))
-remotes::install_github("r-spatial/rgee")
+# install.packages(c("remotes", "googledrive"))
+# remotes::install_github("r-spatial/rgee")
 library(rgee)
 
 # Get the username
@@ -21,6 +21,7 @@ Sys.setenv("RETICULATE_PYTHON" = "/usr/bin/python3")
 ee_install()
 ee_check()
 rgee::ee_install_upgrade()
+ee_check()
 
 # 5. Authenticate and init your EE session
 # Attempt to authenticate. If credentials are found, nothing will happen except

@@ -62,9 +62,13 @@ ggplot() +
   geom_spatvector(data=pond_polygons_d) +
   geom_spatvector(data=vect_pond_names) +
   geom_spatvector_label(aes(label=ID),data=pond_polygons_d) +
-  geom_spatvector_text(aes(label=polygon),data=vect_pond_names)
+  #geom_spatvector_text(aes(label=polygon),data=vect_pond_names,color="blue") +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names)
   
-
+# Swap ponds 11 and 12
+df_pond_names[which(df_pond_names$polygon==11),]$polygon <- 100
+df_pond_names[which(df_pond_names$polygon==12),]$polygon <- 11
+df_pond_names[which(df_pond_names$polygon==100),]$polygon <- 12
 
 # Save pond names to file
 write.csv(df_pond_names,"intermediate/df_pond_names.csv",
@@ -91,6 +95,27 @@ for (i in c(1:length(filenames))){
   rast_tmp <- rast(paste0("gee_tifs/",filenames[i]))
   assign(paste0("rast_day",i), rast_tmp)
 }
+
+# Specify the coordinate that we're going to use for haze correction
+#haze <- data.frame("lat"=16.661489, "lon"=81.109449)
+#haze <- data.frame("lat"=16.661643, "lon"=81.109135)
+haze <- data.frame("lat"=16.643152, "lon"=81.137731)
+vec_haze <- vect(haze, geom=c("lon","lat"), crs="epsg:4326")
+vec_haze_proj <- project(vec_haze, rast_tmp)
+
+# get some info relevant to haze
+df_haze <- rbind(extract(rast_day1,vec_haze_proj),
+                 extract(rast_day2,vec_haze_proj),
+                 extract(rast_day3,vec_haze_proj),
+                 extract(rast_day4,vec_haze_proj),
+                 extract(rast_day5,vec_haze_proj))
+df_haze_day3 <- rbind(df_haze[3,],
+                      df_haze[3,],
+                      df_haze[3,],
+                      df_haze[3,],
+                      df_haze[3,])
+df_haze_rel <- df_haze/df_haze_day3
+df_haze_rel
 
 # Import cloud mask images as SpatRasters
 filenames_cloud <- list.files("gee_cloudmasks/")
@@ -127,32 +152,6 @@ g_cloud <- grid.arrange(g_cloud_1,
                         g_cloud_5,
                         nrow=5)
 
-# Generate true colour images to get our bearings
-g_day1_rgb <- ggplot() +
-  geom_spatraster_rgb(data=rast_day1,r=4,g=3,b=2,max_col_value=3500) +
-  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
-  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
-  ggtitle("Day 1; true-colour (RGB)")
-g_day2_rgb <- ggplot() +
-  geom_spatraster_rgb(data=rast_day2,r=4,g=3,b=2,max_col_value=3500) +
-  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
-  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
-  ggtitle("Day 2; true-colour (RGB)")
-g_day3_rgb <- ggplot() +
-  geom_spatraster_rgb(data=rast_day3,r=4,g=3,b=2,max_col_value=3500) +
-  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
-  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
-  ggtitle("Day 3; true-colour (RGB)")
-g_day4_rgb <- ggplot() +
-  geom_spatraster_rgb(data=rast_day4,r=4,g=3,b=2,max_col_value=3500) +
-  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
-  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
-  ggtitle("Day 4; true-colour (RGB)")
-g_day5_rgb <- ggplot() +
-  geom_spatraster_rgb(data=rast_day5,r=4,g=3,b=2,max_col_value=3500) +
-  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
-  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
-  ggtitle("Day 5; true-colour (RGB)")
 
 # Generate histograms of the cloud masks to get our bearings
 hist_cloud_1 <- ggplot(aes(x=probability),data=cloud_day1) +
@@ -171,19 +170,7 @@ hist_cloud_5 <- ggplot(aes(x=probability),data=cloud_day5) +
   geom_histogram(bins=100) +
   scale_x_continuous(breaks=seq(0,100,2))
 
-# Combine all into a side-by-side comparison
-g_rgb_clouds <- grid.arrange(g_day1_rgb,
-                             g_cloud_1,
-                             g_day2_rgb,
-                             g_cloud_2,
-                             g_day3_rgb,
-                             g_cloud_3,
-                             g_day4_rgb,
-                             g_cloud_4,
-                             g_day5_rgb,
-                             g_cloud_5,
-                             nrow=5)
-ggsave("preliminary_analysis/g_rgb_clouds.png",g_rgb_clouds,width=10,height=20)
+
 g_hist_clouds <- grid.arrange(hist_cloud_1,
                               hist_cloud_2,
                               hist_cloud_3,
@@ -196,28 +183,157 @@ ggsave("preliminary_analysis/g_hist_clouds.png",g_hist_clouds,width=10,height=20
 # (from day 1 to day 5, in order)
 cloud_threshold <- c(10,30,12,22,26)
 
+
+
 # Now repeat the process (sorry)
 # mask by the cloud threshold
 # and then extract mean values for each band for each pond
 # Note that this requires the cloud masks and the main data tifs
 # to have identical filenames per day
 for (i in c(1:length(filenames))){
+  # Import rasters
   rast_tmp <- rast(paste0("gee_tifs/",filenames[i]))
   cloud_tmp <- rast(paste0("gee_cloudmasks/",filenames[i]))
   
-  rast_tmp_resampled <- resample(rast_tmp,cloud_tmp)
-  rast_tmp_masked <- mask(x = rast_tmp_resampled,
-                          mask = cloud_tmp,
+  # Adjust for haze (sorry)
+  rast_tmp_hazed <- rast_tmp
+  rast_tmp_hazed$B1 <- rast_tmp_hazed$B1/df_haze_rel$B1[i]
+  rast_tmp_hazed$B2 <- rast_tmp_hazed$B2/df_haze_rel$B2[i]
+  rast_tmp_hazed$B3 <- rast_tmp_hazed$B3/df_haze_rel$B3[i]
+  rast_tmp_hazed$B4 <- rast_tmp_hazed$B4/df_haze_rel$B4[i]
+  rast_tmp_hazed$B5 <- rast_tmp_hazed$B5/df_haze_rel$B5[i]
+  rast_tmp_hazed$B6 <- rast_tmp_hazed$B6/df_haze_rel$B6[i]
+  rast_tmp_hazed$B7 <- rast_tmp_hazed$B7/df_haze_rel$B7[i]
+  rast_tmp_hazed$B8 <- rast_tmp_hazed$B8/df_haze_rel$B8[i]
+  rast_tmp_hazed$B8A <- rast_tmp_hazed$B8A/df_haze_rel$B8A[i]
+  rast_tmp_hazed$B9 <- rast_tmp_hazed$B9/df_haze_rel$B9[i]
+  rast_tmp_hazed$B11 <- rast_tmp_hazed$B11/df_haze_rel$B11[i]
+  rast_tmp_hazed$B12 <- rast_tmp_hazed$B12/df_haze_rel$B12[i]
+  assign(paste0("rast_hazed_day",i), rast_tmp_hazed)
+  
+  
+  # Perform cloud masking
+  #rast_tmp_resampled <- resample(rast_tmp,cloud_tmp,method="near")
+  cloud_tmp_resampled <- resample(cloud_tmp,rast_tmp,method="near")
+  rast_tmp_hazed_masked <- mask(x = rast_tmp,
+                          mask = cloud_tmp_resampled,
                           maskvalues = seq(cloud_threshold[i],100,1))
+  assign(paste0("rast_hazed_masked_day",i), rast_tmp_hazed_masked)
   
-  assign(paste0("rast_masked_day",i), rast_tmp_masked)
+  # Scale
+  rast_tmp_hazed_masked_scaled <- terra::scale(rast_tmp_hazed_masked,
+                                        center=F,
+                                        scale=T)
+  assign(paste0("rast_hazed_masked_scaled_day",i), rast_tmp_hazed_masked_scaled)
   
-  extract_tmp <- extract(rast_tmp_masked,pond_polygons_d,fun=mean,na.rm=TRUE)
+  # Extract themean  reflectance data from the ponds
+  #extract_tmp <- extract(rast_tmp_masked,pond_polygons_d,fun=mean,na.rm=TRUE)
+  extract_tmp <- extract(rast_tmp_hazed_masked_scaled,pond_polygons_d,fun=mean,na.rm=TRUE,
+                         touches=F)
+  
   names(extract_tmp)[c(2:ncol(extract_tmp))] <- 
     paste0(names(extract_tmp)[c(2:ncol(extract_tmp))],"_day",i)
   
   assign(paste0("extract_rast_day",i), extract_tmp)
+
 }
+
+# Generate true colour images to get our bearings
+g_day1_rgb_1 <- ggplot() +
+  geom_spatraster_rgb(data=rast_day1,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 1; RGB")
+g_day1_rgb_2 <- ggplot() +
+  geom_spatraster_rgb(data=rast_hazed_day1,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 1; RGB; hazed")
+g_day1_rgb_3 <- ggplot() +
+  geom_spatraster_rgb(data=rast_hazed_masked_scaled_day1,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 1; RGB; masked; hazed")
+g_day2_rgb_1 <- ggplot() +
+  geom_spatraster_rgb(data=rast_day2,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 2; RGB")
+g_day2_rgb_2 <- ggplot() +
+  geom_spatraster_rgb(data=rast_hazed_day2,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 2; RGB; hazed")
+g_day2_rgb_3 <- ggplot() +
+  geom_spatraster_rgb(data=rast_hazed_masked_scaled_day2,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 2; RGB; masked; hazed")
+g_day3_rgb_1 <- ggplot() +
+  geom_spatraster_rgb(data=rast_day3,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 3; RGB")
+g_day3_rgb_2 <- ggplot() +
+  geom_spatraster_rgb(data=rast_hazed_day3,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 3; RGB; hazed")
+g_day3_rgb_3 <- ggplot() +
+  geom_spatraster_rgb(data=rast_hazed_masked_scaled_day3,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 3; RGB; masked; hazed")
+g_day4_rgb_1 <- ggplot() +
+  geom_spatraster_rgb(data=rast_day4,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 4; RGB")
+g_day4_rgb_2 <- ggplot() +
+  geom_spatraster_rgb(data=rast_hazed_day4,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 4; RGB; hazed")
+g_day4_rgb_3 <- ggplot() +
+  geom_spatraster_rgb(data=rast_hazed_masked_scaled_day4,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 4; RGB; masked; hazed")
+g_day5_rgb_1 <- ggplot() +
+  geom_spatraster_rgb(data=rast_day5,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 5; RGB")
+g_day5_rgb_2 <- ggplot() +
+  geom_spatraster_rgb(data=rast_hazed_day5,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 5; RGB; hazed")
+g_day5_rgb_3 <- ggplot() +
+  geom_spatraster_rgb(data=rast_hazed_masked_scaled_day5,r=4,g=3,b=2,max_col_value=3500) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
+  ggtitle("Day 5; RGB; masked; hazed")
+
+# Combine all into a side-by-side comparison
+g_rgb_clouds <- grid.arrange(g_day1_rgb_1,
+                             g_day1_rgb_2,
+                             g_day1_rgb_3,
+                             g_cloud_1,
+                             g_day3_rgb_1,
+                             g_day3_rgb_2,
+                             g_day3_rgb_3,
+                             g_cloud_3,
+                             g_day4_rgb_1,
+                             g_day4_rgb_2,
+                             g_day4_rgb_3,
+                             g_cloud_4,
+                             g_day5_rgb_1,
+                             g_day5_rgb_2,
+                             g_day5_rgb_3,
+                             g_cloud_5,
+                             nrow=5)
+ggsave("preliminary_analysis/g_rgb_clouds.png",g_rgb_clouds,width=20,height=16)
 
 # Merge band pond data into a single data frame
 # https://stackoverflow.com/questions/8091303/simultaneously-merge-multiple-data-frames-in-a-list
@@ -263,6 +379,11 @@ df_wide$temperature <- as.numeric(df_wide$temperature)
 # Retain only complete cases
 df_wide_c <- df_wide[complete.cases(df_wide),]
 
+# Check average values by day
+aggregate(B2~day,FUN=mean,df_wide_c)
+aggregate(B3~day,FUN=mean,df_wide_c)
+aggregate(B4~day,FUN=mean,df_wide_c)
+
 # Save to file
 write.csv(df_wide,"intermediate/df_wide.csv",row.names = F)
 write.csv(df_wide_c,"intermediate/df_wide_c.csv",row.names = F)
@@ -289,7 +410,7 @@ g_day2_rgb <- ggplot() +
   geom_spatraster_rgb(data=rast_masked_day2,r=4,g=3,b=2,max_col_value=3500) +
   geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
   geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
-  ggtitle("Day 2; true-colour (RGB)")
+  ggtitle("Day 2; RGB")
 g_day5_band3 <- ggplot() +
   geom_spatraster(aes(fill=B3),data=rast_masked_day5) +
   scale_fill_viridis(direction=-1,option="mako") +
@@ -306,7 +427,7 @@ g_day5_rgb <- ggplot() +
   geom_spatraster_rgb(data=rast_masked_day5,r=4,g=3,b=2,max_col_value=2500) +
   geom_spatvector(data=pond_polygons_d,fill=NA,linewidth=1.5) +
   geom_spatvector_text(aes(label=pond),data=vect_pond_names,size=2) +
-  ggtitle("Day 5; true-colour (RGB)")
+  ggtitle("Day 5; RGB")
 g_day25_band38 <- grid.arrange(g_day2_band3,
                                g_day2_band8,
                                g_day2_rgb,
@@ -317,5 +438,196 @@ g_day25_band38 <- grid.arrange(g_day2_band3,
 ggsave("preliminary_analysis/g_day25_band38.png",g_day25_band38,width=16,height=12)
 
 
+extract(rast_day1,pond_polygons_d,fun=mean,na.rm=TRUE)$B4
+extract(rast_day2,pond_polygons_d,fun=mean,na.rm=TRUE)$B4
+extract(rast_day3,pond_polygons_d,fun=mean,na.rm=TRUE)$B4
+extract(rast_day4,pond_polygons_d,fun=mean,na.rm=TRUE)$B4
+extract(rast_day5,pond_polygons_d,fun=mean,na.rm=TRUE)$B4
 
+
+
+df_testing_clouds <- data.frame(
+ "band" = c(extract(rast_hazed_masked_scaled_day1,pond_polygons_d,fun=mean,na.rm=TRUE)$B4,
+          extract(rast_hazed_masked_scaled_day2,pond_polygons_d,fun=mean,na.rm=TRUE)$B4,
+          extract(rast_hazed_masked_scaled_day3,pond_polygons_d,fun=mean,na.rm=TRUE)$B4,
+          extract(rast_hazed_masked_scaled_day4,pond_polygons_d,fun=mean,na.rm=TRUE)$B4,
+          extract(rast_hazed_masked_scaled_day5,pond_polygons_d,fun=mean,na.rm=TRUE)$B4),
+ "prop_cells_not_na" = c(extract(not.na(rast_hazed_masked_scaled_day1), pond_polygons_d,fun=mean)$B4,
+                         extract(not.na(rast_hazed_masked_scaled_day2), pond_polygons_d,fun=mean)$B4,
+                         extract(not.na(rast_hazed_masked_scaled_day3), pond_polygons_d,fun=mean)$B4,
+                         extract(not.na(rast_hazed_masked_scaled_day4), pond_polygons_d,fun=mean)$B4,
+                         extract(not.na(rast_hazed_masked_scaled_day5), pond_polygons_d,fun=mean)$B4),
+ "day"=c(rep("day_1",20),
+         rep("day_2",20),
+         rep("day_3",20),
+         rep("day_4",20),
+         rep("day_5",20)
+         )
+)
+ggplot(aes(x=prop_cells_not_na,y=band,colour=day),
+       data=df_testing_clouds[which(df_testing_clouds$prop_cells_not_na>0.8),]) +
+  geom_point() +
+  geom_smooth(method="lm")
+
+###############################
+### Try published equations ###
+###############################
+df_wide_c$NDCI <- (df_wide_c$B5-df_wide_c$B4)/(df_wide_c$B5+df_wide_c$B4)
+aggregate(NDCI~day,data=df_wide_c,FUN=mean)
+df_wide_c$mishra <- 14.039 + 
+  (86.155*df_wide_c$NDCI) +
+  (194.325*(df_wide_c$NDCI^2))
+df_wide_c_13 <- df_wide_c[which(df_wide_c$day %in% c(1,3)),]
+ggplot(aes(x=chlorophyll,y=mishra),data=df_wide_c_13) +
+  geom_point()
+
+lm_chl_quadratic <- lm(chlorophyll ~ NDCI + I(NDCI^2), df_wide_c_13)
+summary(lm_chl_quadratic)
+
+rast_masked_day1$NDCI <- (rast_masked_day1$B5-rast_masked_day1$B4)/
+  (rast_masked_day1$B5+rast_masked_day1$B4)
+rast_masked_day3$NDCI <- (rast_masked_day3$B5-rast_masked_day3$B4)/
+  (rast_masked_day3$B5+rast_masked_day3$B4)
+ggplot() +
+  geom_spatraster(aes(fill=NDCI),data=rast_masked_day1) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,colour="red") +
+  scale_fill_viridis()
+ggplot() +
+  geom_spatraster(aes(fill=NDCI),data=rast_masked_day3) +
+  geom_spatvector(data=pond_polygons_d,fill=NA,colour="red") +
+  geom_spatvector(data=vect_pond_names,fill=NA,colour="red") +
+  scale_fill_viridis()  +
+  geom_spatvector_label(aes(label=ID),data=pond_polygons_d) +
+  geom_spatvector_text(aes(label=polygon),data=vect_pond_names,color="blue") +
+  geom_spatvector_text(aes(label=pond),data=vect_pond_names)
+
+extract(rast_masked_day1, pond_polygons_d,fun=mean,na.rm=T)$NDCI
+sd(extract(rast_masked_day1, pond_polygons_d,fun=mean,na.rm=T)$NDCI)
+extract(rast_masked_day1$NDCI, pond_polygons_d,fun=range,na.rm=T)
+extract(rast_masked_day1, pond_polygons_d,fun=sd,na.rm=T)$NDCI
+
+rast_masked_day1_pondsonly <- mask(rast_hazed_masked_scaled_day1,
+                                   project(pond_polygons_d,rast_hazed_masked_scaled_day1))
+rast_masked_day3_pondsonly <- mask(rast_hazed_masked_scaled_day3,
+                                   project(pond_polygons_d,rast_hazed_masked_scaled_day3))
+rast_masked_day1_pondsonly$NDCI <- (rast_masked_day1_pondsonly$B5-rast_masked_day1_pondsonly$B4)/
+  (rast_masked_day1_pondsonly$B5+rast_masked_day1_pondsonly$B4)
+rast_masked_day3_pondsonly$NDCI <- (rast_masked_day3_pondsonly$B5-rast_masked_day3_pondsonly$B4)/
+  (rast_masked_day3_pondsonly$B5+rast_masked_day3_pondsonly$B4)
+
+
+ggplot() +
+  geom_spatraster(aes(fill=NDCI),data=rast_masked_day1_pondsonly)  +
+  scale_fill_viridis() +
+  geom_spatvector(data=vect_pond_names,fill=NA,colour="red")
+
+ggplot() +
+  geom_spatraster(aes(fill=NDCI),data=rast_masked_day3_pondsonly)  +
+  scale_fill_viridis() +
+  geom_spatvector(data=vect_pond_names,fill=NA,colour="red")
+
+extract(rast_masked_day1_pondsonly,vect_pond_names)
+vect_pond_names_p <- project(vect_pond_names,rast_masked_day1_pondsonly)
+
+rast_masked_day1_pondsonly_distance <- distance(rast_masked_day1_pondsonly)
+ggplot() +
+  geom_spatraster(aes(fill=B3),data=rast_masked_day1_pondsonly_distance) 
+head(rast_masked_day1_pondsonly_distance$B3)
+head(rast_masked_day1_pondsonly_distance$B8A)
+head(rast_masked_day1_pondsonly_distance$NDCI)
+extract(rast_masked_day1_pondsonly_distance,vect_pond_names)$B1
+
+rast_masked_day1_pondsonly_focal <- focal(rast_masked_day1_pondsonly,
+                                          9, 
+                                          "modal", 
+                                          na.policy="only",
+                                          na.rm=T)
+rast_masked_day3_pondsonly_focal <- focal(rast_masked_day3_pondsonly,
+                                          9, 
+                                          "modal", 
+                                          na.policy="only",
+                                          na.rm=T)
+
+vect_pond_names$NDCI_day1 <- extract(rast_masked_day1_pondsonly_focal,vect_pond_names)$NDCI
+vect_pond_names$NDCI_day3 <- extract(rast_masked_day3_pondsonly_focal,vect_pond_names)$NDCI
+vect_pond_names
+
+
+df_wide_c_13_focal <- merge(df_wide_c_13,vect_pond_names,by="pond")
+df_wide_c_13_focal$NDCI_polygon <- df_wide_c_13_focal$NDCI.x
+df_wide_c_13_focal$NDCI_point <- ifelse(df_wide_c_13_focal$day==1,
+                                        df_wide_c_13_focal$NDCI_day1,
+                                        df_wide_c_13_focal$NDCI_day3)
+
+ggplot(aes(x=NDCI_point,y=NDCI_polygon),data=df_wide_c_13_focal) +
+  geom_point() +
+  xlim(0,0.5) +
+  ylim(0,0.5)
+ggplot(aes(x=chlorophyll,y=NDCI_point),data=df_wide_c_13_focal) +
+  geom_point()
+
+lm_chl_quadratic_point <- lm(chlorophyll ~ NDCI_point + I(NDCI_point^2), df_wide_c_13_focal)
+summary(lm_chl_quadratic_point)
+lm_chl_linear_point <- lm(NDCI_point~chlorophyll,data=df_wide_c_13_focal)
+summary(lm_chl_linear_point)
+cor.test(df_wide_c_13_focal$NDCI_point,
+         df_wide_c_13_focal$chlorophyll)
+
+
+
+ggplot() +
+  geom_spatraster(aes(fill=NDCI),data=rast_masked_day1_pondsonly)  +
+  scale_fill_viridis() +
+  geom_spatvector(data=vect_pond_names,fill=NA,colour="red")
+ggplot() +
+  geom_spatraster(aes(fill=NDCI),data=rast_masked_day1)  +
+  scale_fill_viridis() +
+  geom_spatvector(data=vect_pond_names,fill=NA,colour="red")
+rast_day1$NDCI <- (rast_day1$B5-rast_day1$B4)/(rast_day1$B5+rast_day1$B4)
+ggplot() +
+  geom_spatraster(aes(fill=NDCI),data=rast_day1)  +
+  scale_fill_viridis() +
+  geom_spatvector(data=vect_pond_names,fill=NA,colour="red") +
+  geom_spatvector(data=pond_polygons_d,fill=NA,colour="purple",linewidth=1)
+ggplot() +
+  geom_spatraster(aes(fill=NDCI),data=rast_masked_day1_pondsonly_focal)  +
+  scale_fill_viridis() +
+  geom_spatvector(data=vect_pond_names,fill=NA,colour="red")
+
+extract(rast_day1$NDCI,pond_polygons_d,fun=mean)
+extract(rast_day1$NDCI,pond_polygons_d,fun=range)
+
+extract(not.na(rast_day1), pond_polygons_d,fun=mean)
+aggregate(cell~ID,FUN=length,data=cells(rast_masked_day1,project(pond_polygons_d,rast_masked_day2)))$cell
+
+
+extract(rast_masked_day2,project(pond_polygons_d,rast_masked_day2),na.rm=TRUE)$B4
+aggregate(cell~ID,FUN=length,data=cells(rast_masked_day1,project(pond_polygons_d,rast_masked_day2)))
+aggregate(cell~ID,FUN=length,data=cells(rast_masked_day2,project(pond_polygons_d,rast_masked_day2)))
+cells(rast_masked_day2,project(pond_polygons_d,rast_masked_day2))
+
+
+
+mean(extract(rast_masked_day1,pond_polygons_d,fun=mean,na.rm=TRUE)$B4,na.rm=T)
+mean(extract(rast_masked_day2,pond_polygons_d,fun=mean,na.rm=TRUE)$B4,na.rm=T)
+mean(extract(rast_masked_day3,pond_polygons_d,fun=mean,na.rm=TRUE)$B4,na.rm=T)
+mean(extract(rast_masked_day4,pond_polygons_d,fun=mean,na.rm=TRUE)$B4,na.rm=T)
+mean(extract(rast_masked_day5,pond_polygons_d,fun=mean,na.rm=TRUE)$B4,na.rm=T)
+
+length(cells(rast_masked_day1))
+length(cells(rast_masked_day2))
+
+
+rast_day2
+cells(rast_day2)
+length(extract(rast_day2,pond_polygons_d,na.rm=TRUE)$B4)
+extract(rast_day2,pond_polygons_d,cells=T,na.rm=TRUE)$B4
+extract(rast_day2,pond_polygons_d,na.rm=TRUE)$B4
+length(extract(rast_day2,pond_polygons_d,na.rm=TRUE)$B4)*(60^2)/100
+extract(rast_masked_day2,pond_polygons_d,fun=mean,na.rm=TRUE)$B4
+
+rast_day1
+rast_masked_day1
+cellSize(rast_day2)
+cellSize(rast_masked_day2)
 
