@@ -12,18 +12,14 @@ library(gridExtra) #To help graphing
 theme_set(theme_bw()) #Because I'm fashionable
 
 # Load ground truth data
-#gt_ammonia <- read.csv("data/gt_ammonia.csv")
-#gt_chlorophyll <- read.csv("data/gt_chlorophyll.csv")
-#gt_do <- read.csv("data/gt_do.csv")
-#gt_ph <- read.csv("data/gt_ph.csv")
-#gt_phycocyanin <- read.csv("data/gt_phycocyanin.csv")
-#gt_temperature <- read.csv("data/gt_temperature.csv")
 gt <- read.csv("data/gt.csv")
+
+# Load dates
 df_dates <- read.csv("data/dates.csv")
-#df_pond_names <- read.csv("data/pond_names.csv")
-#pond_polygons <- vect("data/revised_pond_polygons.kml")
 
 # Load pond polygons
+# Some are stored as lines rather than polygons, so I st_cast these
+# to polygons.
 pond_polygon_GIL2 <- vect("data/pond_boundaries/GIL 2 kml.kml")
 pond_polygon_GOW2 <- vect("data/pond_boundaries/GOW 2 kml.kml")
 pond_polygon_KIS1 <- vect("data/pond_boundaries/KIS 1 kml.kml")
@@ -75,7 +71,7 @@ pond_polygon_SNR2$Name <- "SNR2"
 pond_polygon_VMS1$Name <- "VMS1"
 pond_polygon_VPS3$Name <- "VPS3"
 
-
+# Merge pond polygons into a single SpatVector
 pond_polygons <- rbind(pond_polygon_GIL2,pond_polygon_GOW2,pond_polygon_KIS1,
                                 pond_polygon_PRA1,pond_polygon_SBR1,pond_polygon_SRI1,
                                 pond_polygon_SRI2,pond_polygon_SRK1,pond_polygon_SRV1,
@@ -85,104 +81,12 @@ pond_polygons <- rbind(pond_polygon_GIL2,pond_polygon_GOW2,pond_polygon_KIS1,
                                 pond_polygon_PNR1,pond_polygon_SNR2,pond_polygon_VMS1,
                                 pond_polygon_VPS3)
 
-ggplot() +
-  geom_spatvector(data=pond_polygons_fromfile) +
-  geom_spatvector_text(aes(label=Name),data=pond_polygons_fromfile)
-
-# Disaggregate pond polygons into multiple polygons
-#pond_polygons_d <- disagg(pond_polygons)
-
-# Convert coordinates to decimal degrees
-#df_pond_names$latitude <- word(df_pond_names$point,1)
-#df_pond_names$longitude <- word(df_pond_names$point,2)
-#df_pond_names$latitude<-gsub('°',' ',df_pond_names$latitude)
-#df_pond_names$latitude<-gsub('\'',' ',df_pond_names$latitude)
-#df_pond_names$latitude<-gsub('\\"'," ",df_pond_names$latitude)
-#df_pond_names$latitude<-gsub('N',"",df_pond_names$latitude)
-#df_pond_names$longitude<-gsub('°',' ',df_pond_names$longitude)
-#df_pond_names$longitude<-gsub('\'',' ',df_pond_names$longitude)
-#df_pond_names$longitude<-gsub('\\"'," ",df_pond_names$longitude)
-#df_pond_names$longitude<-gsub('E',"",df_pond_names$longitude)
-#df_pond_names$lat <- as.numeric(conv_unit(df_pond_names$latitude,
-                                          #from="deg_min_sec",
-                                          #to="dec_deg"))
-#df_pond_names$lon <- as.numeric(conv_unit(df_pond_names$longitude,
-                                          #from="deg_min_sec",
-                                          #to="dec_deg"))
-#df_pond_names <- df_pond_names[,c("pond","polygon","lon","lat")]
-
-
-# Need to correct df_pond_names and pond_polygons_d such that the ponds are labelled
-# north to south (since I revised the polygon KML file)
-#df_pond_names$polygon <- order(df_pond_names$lat)
-#pond_polygons_d_centroids <- as.data.frame(geom(centroids(pond_polygons_d)))
-#pond_polygons_d_centroids$rank <- rank(pond_polygons_d_centroids$y)
-#pond_polygons_d$ID <- rank(pond_polygons_d_centroids$y)
-
-# Convert pond points to spatvector
-#vect_pond_names <- as_spatvector(df_pond_names)
-#crs(vect_pond_names) <- crs(pond_polygons_d)
-
-# Make sure pond and polygon IDs are correct
-
-#ggplot() +
-  #geom_spatvector(data=pond_polygons_d) +
-  #geom_spatvector(data=vect_pond_names) +
-  #geom_spatvector_label(aes(label=ID),data=pond_polygons_d) +
-  #geom_spatvector_text(aes(label=polygon),data=vect_pond_names,color="blue") +
-  #geom_spatvector_text(aes(label=pond),data=vect_pond_names)
-  
-# Swap ponds 11 and 12
-#df_pond_names[which(df_pond_names$polygon==11),]$polygon <- 100
-#df_pond_names[which(df_pond_names$polygon==12),]$polygon <- 11
-#df_pond_names[which(df_pond_names$polygon==100),]$polygon <- 12
-
-# Save pond names to file
-#write.csv(df_pond_names,"intermediate/df_pond_names.csv",
-          #row.names=F)
-
-
-# Combine ground truth data
-#names(gt_ammonia)[c(2:6)] <- paste0("ammonia_",names(gt_ammonia))[c(2:6)]
-#names(gt_chlorophyll)[c(2:6)] <- paste0("chlorophyll_",names(gt_chlorophyll))[c(2:6)]
-#names(gt_do)[c(2:6)] <- paste0("do_",names(gt_do))[c(2:6)]
-#names(gt_ph)[c(2:6)] <- paste0("ph_",names(gt_ph))[c(2:6)]
-#names(gt_phycocyanin)[c(2:6)] <- paste0("phycocyanin_",names(gt_phycocyanin))[c(2:6)]
-#names(gt_temperature)[c(2:6)] <- paste0("temperature_",names(gt_temperature))[c(2:6)]
-
-#df_gt <- cbind(gt_ammonia, gt_chlorophyll, gt_do, gt_ph, gt_phycocyanin, gt_temperature)
-#df_gt <- df_gt[,-c(7,13,19,25,31)]
-
-# Match ground truth data with coords
-#df_gt <- merge(df_pond_names,df_gt,by="pond")
-
 # Import sentinel-2 images as SpatRasters
 filenames <- list.files("gee_tifs/")
 for (i in c(1:length(filenames))){
   rast_tmp <- rast(paste0("gee_tifs/",filenames[i]))
   assign(paste0("rast_day",i), rast_tmp)
 }
-
-# Specify the coordinate that we're going to use for haze correction
-#haze <- data.frame("lat"=16.661489, "lon"=81.109449)
-#haze <- data.frame("lat"=16.661643, "lon"=81.109135)
-#haze <- data.frame("lat"=16.643152, "lon"=81.137731)
-#vec_haze <- vect(haze, geom=c("lon","lat"), crs="epsg:4326")
-#vec_haze_proj <- project(vec_haze, rast_tmp)
-
-# get some info relevant to haze
-#df_haze <- rbind(extract(rast_day1,vec_haze_proj),
-                 #extract(rast_day2,vec_haze_proj),
-                 #extract(rast_day3,vec_haze_proj),
-                 #extract(rast_day4,vec_haze_proj),
-                 #extract(rast_day5,vec_haze_proj))
-#df_haze_day3 <- rbind(df_haze[3,],
-                      #df_haze[3,],
-                      #df_haze[3,],
-                      #df_haze[3,],
-                      #df_haze[3,])
-#df_haze_rel <- df_haze/df_haze_day3
-#df_haze_rel
 
 # Import cloud mask images as SpatRasters
 filenames_cloud <- list.files("gee_cloudmasks/")
@@ -193,7 +97,7 @@ for (i in c(1:length(filenames_cloud))){
 
 # Choose the cloud mask thresholds
 # (from day 1 to day 5, in order)
-cloud_threshold <- c(10,30,12,22,26)
+c(10,30,12,22,26)
 
 # Now repeat the process (sorry)
 # mask by the cloud threshold
@@ -201,43 +105,106 @@ cloud_threshold <- c(10,30,12,22,26)
 # Note that this requires the cloud masks and the main data tifs
 # to have identical filenames per day
 for (i in c(1:length(filenames))){
-  # Import rasters
+  # 1. Import rasters
   rast_tmp <- rast(paste0("gee_tifs/",filenames[i]))
   cloud_tmp <- rast(paste0("gee_cloudmasks/",filenames[i]))
   
-  # Adjust for haze (sorry)
-  #rast_tmp_hazed <- rast_tmp
-  #rast_tmp_hazed$B1 <- rast_tmp_hazed$B1/df_haze_rel$B1[i]
-  #rast_tmp_hazed$B2 <- rast_tmp_hazed$B2/df_haze_rel$B2[i]
-  #rast_tmp_hazed$B3 <- rast_tmp_hazed$B3/df_haze_rel$B3[i]
-  #rast_tmp_hazed$B4 <- rast_tmp_hazed$B4/df_haze_rel$B4[i]
-  #rast_tmp_hazed$B5 <- rast_tmp_hazed$B5/df_haze_rel$B5[i]
-  #rast_tmp_hazed$B6 <- rast_tmp_hazed$B6/df_haze_rel$B6[i]
-  #rast_tmp_hazed$B7 <- rast_tmp_hazed$B7/df_haze_rel$B7[i]
-  #rast_tmp_hazed$B8 <- rast_tmp_hazed$B8/df_haze_rel$B8[i]
-  #rast_tmp_hazed$B8A <- rast_tmp_hazed$B8A/df_haze_rel$B8A[i]
-  #rast_tmp_hazed$B9 <- rast_tmp_hazed$B9/df_haze_rel$B9[i]
-  #rast_tmp_hazed$B11 <- rast_tmp_hazed$B11/df_haze_rel$B11[i]
-  #rast_tmp_hazed$B12 <- rast_tmp_hazed$B12/df_haze_rel$B12[i]
-  #assign(paste0("rast_hazed_day",i), rast_tmp_hazed)
-  
-  
-  # Perform cloud masking
-  #rast_tmp_resampled <- resample(rast_tmp,cloud_tmp,method="near")
+  # 2. Perform cloud masking
+  # Resample the cloud mask to the same resolution as the main raster
   cloud_tmp_resampled <- resample(cloud_tmp,rast_tmp,method="near")
+  
+  # Mask
   rast_tmp_masked <- mask(x = rast_tmp,
                           mask = cloud_tmp_resampled,
                           maskvalues = seq(cloud_threshold[i],100,1))
-  assign(paste0("rast_masked_day",i), rast_tmp_masked)
   
-  # Scale
-  #rast_tmp_hazed_masked_scaled <- terra::scale(rast_tmp_hazed_masked,
-                                        #center=F,
-                                        #scale=T)
-  #assign(paste0("rast_hazed_masked_scaled_day",i), rast_tmp_hazed_masked_scaled)
+  # 3. Perform dehazing using the dark channel prior method
+  # see He et al 2011, Single image haze removal using dark channel prior
+  # Hultberg et al 2018, Dehazing of Satellite Images
+  # Lee et al 2016, A review on dark channel prior based image dehazing algorithms
   
-  # Extract themean  reflectance data from the ponds
-  #extract_tmp <- extract(rast_tmp_masked,pond_polygons_d,fun=mean,na.rm=TRUE)
+  # Calculate dark channel
+  rast_tmp_masked$dark <- min(rast_tmp_masked$B2,
+                              rast_tmp_masked$B3,
+                              rast_tmp_masked$B4)
+  
+  # Min-filter the dark channel
+  filter_width <- 3 #number of pixels in filter
+  rast_tmp_masked$dark_filtered <- focal(rast_tmp_masked$dark,
+                                         w=filter_width,
+                                         fun="min")
+  
+  # Calculate atmospheric light
+  # First, we need to get the brightest 0.1% of pixels in the dark channel
+  # Get the pixel value corresponding to the brightest 0.1%
+  brightest_dark <- as.numeric(terra::global(x=rast_tmp_masked$dark_filtered,
+                                  fun=quantile,
+                                  probs=c(0.999),
+                                  na.rm=T))
+  
+  # Get the pixels in the dark channel with brightness above that value
+  # Those pixels are set to 1, and others are set to NA
+  classification_matrix <- cbind(c(0,brightest_dark-1),
+                                  c(brightest_dark,9999),
+                                  c(0,1))
+  rast_tmp_brightest_dark <- classify(rast_tmp_masked$dark_filtered,
+                                      classification_matrix)
+  rast_tmp_brightest_dark <- subst(rast_tmp_brightest_dark,
+                                   1,
+                                   1,
+                                   NA)
+  
+  # Get the intensity *in RGB* of those bright pixels
+  # The atmospheric light for each colour simply equals the maximum of that colour
+  # e.g. max_green equals A_green (atmospheric light for green)
+  # see Hultberg et al 2018 p 22 for explanation of why the mean is used
+  rast_tmp_masked_brightest_dark <- mask(rast_tmp_masked,
+                                         rast_tmp_brightest_dark)
+  max_blue <- as.numeric(terra::global(rast_tmp_masked_brightest_dark$B2,fun="mean",na.rm=T))
+  max_green <- as.numeric(terra::global(rast_tmp_masked_brightest_dark$B3,fun="mean",na.rm=T))
+  max_red <- as.numeric(terra::global(rast_tmp_masked_brightest_dark$B4,fun="mean",na.rm=T))
+  c(max_blue,max_green,max_red)
+  
+  # Calculate the normalised input image (I/A)
+  rast_tmp_masked$B2_norm <- rast_tmp_masked$B2/max_blue
+  rast_tmp_masked$B3_norm <- rast_tmp_masked$B3/max_green
+  rast_tmp_masked$B4_norm <- rast_tmp_masked$B4/max_red
+  
+  # Calculate the normalised dark channel (min(I/A))
+  # right-hand side of equation 11 in He et al 2011
+  rast_tmp_masked$dark_norm <- min(rast_tmp_masked$B2_norm,
+                                   rast_tmp_masked$B3_norm,
+                                   rast_tmp_masked$B4_norm)
+  
+  # Calculate transmission map
+  rast_tmp_masked$transmission <- 1-rast_tmp_masked$dark_norm
+
+  # Calculate the scene radiance (i.e., the dehazed image)
+  # equation 22 in He et al 2011
+  t0 <- 0.1
+  rast_tmp_masked$B2_dehazed <- ((rast_tmp_masked$B2-max_blue)/
+                                   max(rast_tmp_masked$transmission,t0))+max_blue
+  rast_tmp_masked$B3_dehazed <- ((rast_tmp_masked$B3-max_green)/
+                                   max(rast_tmp_masked$transmission,t0))+max_green
+  rast_tmp_masked$B4_dehazed <- ((rast_tmp_masked$B4-max_red)/
+                                   max(rast_tmp_masked$transmission,t0))+max_red
+  
+  # Save to the global environment
+  assign(paste0("rast_tmp_masked",i), rast_tmp_masked)
+  assign(paste0("A_",i),c(max_blue,max_green,max_red))
+  
+  # 4. Calculate indices
+  rast_tmp_masked$NDMI <- (rast_tmp_masked$B8-rast_tmp_masked$B11)/(rast_tmp_masked$B8+rast_tmp_masked$B11)
+  rast_tmp_masked$NDWI_b <- (rast_tmp_masked$B3-rast_tmp_masked$B8)/(rast_tmp_masked$B3+rast_tmp_masked$B8)
+  rast_tmp_masked$NDCI_b <- (rast_tmp_masked$B5-rast_tmp_masked$B4)/(rast_tmp_masked$B5+rast_tmp_masked$B4)
+  rast_tmp_masked$NDTI_b <- (rast_tmp_masked$B4-rast_tmp_masked$B3)/(rast_tmp_masked$B4+rast_tmp_masked$B3)
+  rast_tmp_masked$MNDWI_b <- (rast_tmp_masked$B3-rast_tmp_masked$B11)/(rast_tmp_masked$B3+rast_tmp_masked$B11)
+  rast_tmp_masked$NDVI_b <- (rast_tmp_masked$B8-rast_tmp_masked$B4)/(rast_tmp_masked$B8+rast_tmp_masked$B4)
+  rast_tmp_masked$mNDHI_b <- (rast_tmp_masked$B4-rast_tmp_masked$B2)/
+    (rast_tmp_masked$B4+rast_tmp_masked$B2)
+  
+  
+  # 5. Extract the mean reflectance data from the ponds
   extract_tmp <- extract(rast_tmp_masked,pond_polygons,fun=mean,na.rm=TRUE,
                          touches=F,
                          ID=F)
@@ -295,54 +262,25 @@ df_gt_rast_cells <- merge(df_gt_rast,df_cells_prop,by="pondday")
 # Make the columns less messy
 df_clean <- df_gt_rast_cells[,c("pondday",
                                 gt$variable[c(1:6)],
-                                names(extract_rast_day1)[c(1:10)],
+                                names(extract_rast_day1)[c(1:42)],
                                 "cells_count",
                                 "cells_prop")]
 df_clean$pond <- substr(df_clean$pondday,1,4)
 df_clean$day <- as.numeric(substr(df_clean$pondday,6,6))
 
+# Add the average value of the dark channel across all pixels for each day
+dark1 <- global(rast_tmp_masked1$dark_filtered,fun="mean",na.rm=T)
+dark2 <- global(rast_tmp_masked2$dark_filtered,fun="mean",na.rm=T)
+dark3 <- global(rast_tmp_masked3$dark_filtered,fun="mean",na.rm=T)
+dark4 <- global(rast_tmp_masked4$dark_filtered,fun="mean",na.rm=T)
+dark5 <- global(rast_tmp_masked5$dark_filtered,fun="mean",na.rm=T)
+df_clean$dark_day <- NA
+df_clean[which(df_clean$day==1),"dark_day"] <- dark1
+df_clean[which(df_clean$day==2),"dark_day"] <- dark2
+df_clean[which(df_clean$day==3),"dark_day"] <- dark3
+df_clean[which(df_clean$day==4),"dark_day"] <- dark4
+df_clean[which(df_clean$day==5),"dark_day"] <- dark5
+
+
 # Save to file
 write.csv(df_clean,"intermediate/df_clean.csv",row.names = F)
-
-######################
-### Visualise NDCI ###
-######################
-
-
-
-
-rast_masked_day3$NDCI <- (rast_masked_day3$B5-rast_masked_day3$B4)/
-  (rast_masked_day3$B5+rast_masked_day3$B4)
-rast_masked_day1$NDCI <- (rast_masked_day1$B5-rast_masked_day1$B4)/
-  (rast_masked_day1$B5+rast_masked_day1$B4)
-rast_masked_day2$NDCI <- (rast_masked_day2$B5-rast_masked_day2$B4)/
-  (rast_masked_day2$B5+rast_masked_day2$B4)
-rast_masked_day5$NDCI <- (rast_masked_day5$B5-rast_masked_day5$B4)/
-  (rast_masked_day5$B5+rast_masked_day5$B4)
-rast_masked_day4$NDCI <- (rast_masked_day4$B5-rast_masked_day4$B4)/
-  (rast_masked_day4$B5+rast_masked_day4$B4)
-
-ndci_1 <- ggplot() +
-  geom_spatraster(aes(fill=NDCI),data=rast_masked_day1)  +
-  scale_fill_viridis() +
-  geom_spatvector(data=pond_polygons,fill=NA,colour="red")
-ndci_2 <- ggplot() +
-  geom_spatraster(aes(fill=NDCI),data=rast_masked_day2)  +
-  scale_fill_viridis() +
-  geom_spatvector(data=pond_polygons,fill=NA,colour="red")
-ndci_3 <- ggplot() +
-  geom_spatraster(aes(fill=NDCI),data=rast_masked_day3)  +
-  scale_fill_viridis() +
-  geom_spatvector(data=pond_polygons,fill=NA,colour="red")
-ndci_4 <- ggplot() +
-  geom_spatraster(aes(fill=NDCI),data=rast_masked_day4)  +
-  scale_fill_viridis() +
-  geom_spatvector(data=pond_polygons,fill=NA,colour="red")
-ndci_5 <- ggplot() +
-  geom_spatraster(aes(fill=NDCI),data=rast_masked_day5)  +
-  scale_fill_viridis() +
-  geom_spatvector(data=pond_polygons,fill=NA,colour="red")
-g_ndci <- grid.arrange(ndci_1,ndci_2,ndci_3,ndci_4,ndci_5)
-ggsave("preliminary_analysis/g_ndci.png",g_ndci,width=15,height=15)
-
-
