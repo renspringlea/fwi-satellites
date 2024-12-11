@@ -1,0 +1,44 @@
+#Load libraries etc
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path)) #Set working directory
+library(terra) #For spatial data analysis
+library(tidyterra) #For graphing etc
+library(measurements) #For converting units
+library(stringr) #For converting units
+library(caret) #for neural networks
+library(gridExtra) #to help graphing
+library(ggplot2) #For graphing
+theme_set(theme_bw()) #Because I'm fashionable
+
+# Load data
+df_wide_c <- read.csv("intermediate/df_clean.csv")
+
+# Restrict based on cell numbers
+df_wide_c <- df_wide_c[which(df_wide_c$cells_count>5 & df_wide_c$cells_prop>0.5),]
+
+df_wide_c$do_plusnoise <- df_wide_c$do*rnorm(nrow(df_wide_c),mean=1,sd=0.2)
+df_wide_c$ph_plusnoise <- df_wide_c$ph*rnorm(nrow(df_wide_c),mean=1,sd=0.01)
+df_wide_c$amm_plusnoise <- df_wide_c$amm*rnorm(nrow(df_wide_c),mean=1,sd=0.25)
+df_wide_c$chl_plusnoise <- df_wide_c$chl*rnorm(nrow(df_wide_c),mean=1,sd=0.2)
+
+stats_do <- round(postResample(pred=df_wide_c$do,obs=df_wide_c$do_plusnoise),3)
+stats_ph <- round(postResample(pred=df_wide_c$ph,obs=df_wide_c$ph_plusnoise),3)
+stats_amm <- round(postResample(pred=df_wide_c$amm,obs=df_wide_c$amm_plusnoise),3)
+stats_chl <- round(postResample(pred=df_wide_c$chl,obs=df_wide_c$chl_plusnoise),3)
+
+string_do <- paste0("RMSE = ",stats_do[1],"\nR^2 = ",stats_do[2],"\nMAE = ",stats_do[3])
+string_ph <- paste0("RMSE = ",stats_ph[1],"\nR^2 = ",stats_ph[2],"\nMAE = ",stats_ph[3])
+string_amm <- paste0("RMSE = ",stats_amm[1],"\nR^2 = ",stats_amm[2],"\nMAE = ",stats_amm[3])
+string_chl <- paste0("RMSE = ",stats_chl[1],"\nR^2 = ",stats_chl[2],"\nMAE = ",stats_chl[3])
+
+g_do <- ggplot(aes(x=do,y=do_plusnoise),data=df_wide_c) + geom_point() +
+  labs(caption=string_do)
+g_ph <- ggplot(aes(x=ph,y=ph_plusnoise),data=df_wide_c) + geom_point() +
+  labs(caption=string_ph)
+g_amm <- ggplot(aes(x=amm,y=amm_plusnoise),data=df_wide_c) + geom_point() +
+  labs(caption=string_amm)
+g_chl <- ggplot(aes(x=chl,y=chl_plusnoise),data=df_wide_c) + geom_point() +
+  labs(caption=string_chl)
+
+g <- grid.arrange(g_do,g_ph,g_amm,g_chl,nrow=2)
+
+ggsave("simulated_with_noise.png",g,width=6,height=6)
